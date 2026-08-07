@@ -1,4 +1,4 @@
-# Lecture 08: Batch Operations in JDBC
+# Lecture 06: Batch Operations in JDBC
 
 ---
 
