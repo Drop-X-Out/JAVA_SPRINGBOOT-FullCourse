@@ -192,8 +192,6 @@ So the request isn't necessarily "lost."
 
 # 6. Minimum vs Maximum Connections
 
-This is where students often get confused.
-
 Suppose:
 
 ```text
@@ -720,8 +718,6 @@ config.setPassword("root");
 
 Database password.
 
-Obviously, students should replace it with their actual MySQL password.
-
 ---
 
 # 10. Minimum idle
@@ -1028,8 +1024,6 @@ HikariCP intercepts it
 Connection returned to pool
 ```
 
-This is one of the **most important concepts for students**.
-
 ---
 
 # 20. Finally close the pool
@@ -1189,9 +1183,6 @@ public class Main {
     }
 }
 ```
-
-Here students can see something interesting:
-
 ```text
 Request 1 → C1
 Request 2 → C1
@@ -1278,7 +1269,6 @@ Better:
 
 > **`minimumIdle` is the target number of idle connections HikariCP tries to maintain, while `maximumPoolSize` limits the pool's total size.**
 
-For a first lecture, though, I'd use **`minimumIdle = 2`, `maximumPoolSize = 5`** so students can clearly see the difference between **ready/idle connections** and **maximum capacity**.
 
 [1]: https://github.com/openbouquet/HikariCP/blob/master/README.md?utm_source=chatgpt.com "HikariCP/README.md at master · openbouquet/HikariCP · GitHub"
 [2]: https://central.sonatype.com/artifact/com.zaxxer/HikariCP/5.0.0?utm_source=chatgpt.com "Maven Central: com.zaxxer:HikariCP:5.0.0"
@@ -2076,8 +2066,6 @@ properties.remove("age");
 
 # 9. Practical Example — Database Configuration
 
-This is where students understand **why properties files are useful**.
-
 ### `db.properties`
 
 ```properties
@@ -2118,8 +2106,6 @@ public class Main {
     }
 }
 ```
-
-Now if the database changes, students don't have to modify Java code.
 
 ---
 
