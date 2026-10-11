@@ -1,346 +1,211 @@
-# Session Management in Java Servlets: HttpSession and Cookie
+# Session Management in Java Servlets: `HttpSession` and Cookies
 
 ## 1. Learning Objectives
 
-After completing this lesson, you will understand:
+After completing this lesson, students will understand:
 
-1. Why session management is required in web applications.
+1. Why session management is needed in web applications.
 2. Why HTTP is called a stateless protocol.
 3. What `HttpSession` is and how it works.
 4. How to create, read, update, and invalidate a session.
-5. What cookies are and how browsers store them.
-6. How to create, read, update, and delete cookies.
-7. The difference between `HttpSession` and `Cookie`.
-8. How to implement a simple login and logout flow using session management.
-9. How to test everything using IntelliJ IDEA and Tomcat 10.1.
+5. What cookies are and how they work.
+6. How to create, read, and delete cookies in Servlets.
+7. The difference between sessions and cookies.
+8. How to use JSP pages to display data.
+9. How to build a complete Maven web application using IntelliJ IDEA and Tomcat 10.1.
 
 ---
 
 # Part 1: Understanding Session Management
 
-## 2. What Is Session Management?
+## 2. What Is HTTP?
 
-Imagine that you log in to an online shopping website.
+HTTP stands for **Hypertext Transfer Protocol**. It is the protocol used by a browser and a web server to communicate.
 
-You enter your email and password. The website verifies your credentials and displays:
+Suppose a student opens a website.
 
-```text
-Welcome, Rahul!
-```
-
-Now you open another page:
-
-```text
-/products
-```
-
-The website should still know that you are Rahul and that you have logged in.
-
-But how does the server remember you across multiple HTTP requests?
-
-That is the purpose of **session management**.
-
-Session management allows a web application to associate multiple HTTP requests with the same user or browser session.
-
-Examples include:
-
-- Remembering that a user is logged in.
-- Keeping shopping-cart information.
-- Maintaining a multi-step form.
-- Storing temporary user preferences.
-- Showing a user's name on different pages.
-
-## 3. Why Is Session Management Needed?
-
-Consider this sequence:
-
-```text
-Request 1: Login
-Request 2: Open dashboard
-Request 3: View profile
-Request 4: Open products
-Request 5: Logout
-```
-
-The server needs a way to recognize that requests 2, 3, and 4 belong to the same logged-in user.
-
-Without session management, each request would need to provide all the necessary information again.
-
-That would be inconvenient and, if sensitive credentials were repeatedly sent, potentially dangerous.
-
----
-
-## 4. Understanding the Stateless Nature of HTTP
-
-HTTP is a **stateless protocol**. This means that HTTP itself does not automatically remember the application-level state of previous requests.
-
-Suppose a browser sends these requests:
+The browser sends:
 
 ```http
-GET /dashboard HTTP/1.1
+GET /student HTTP/1.1
 Host: localhost:8080
 ```
 
-Later, it sends:
+The server processes the request and sends a response.
 
 ```http
-GET /profile HTTP/1.1
+HTTP/1.1 200 OK
+Content-Type: text/html
+```
+
+The browser displays the returned page.
+
+Now the student opens another page.
+
+```http
+GET /courses HTTP/1.1
 Host: localhost:8080
 ```
 
-The second request does not inherently tell the server what happened during the first request.
+The server receives another request.
 
-The server needs an additional mechanism to associate requests with the same user.
+By default, HTTP does not automatically remember the identity or previous actions of the person who sent an earlier request.
+
+This property is called **statelessness**.
+
+## 3. Why Do We Need Session Management?
+
+Imagine building a student portal.
+
+A student logs in with:
+
+```text
+Email: student@example.com
+Password: ********
+```
+
+After a successful login, the student opens:
+
+- Dashboard
+- Profile
+- Courses
+- Attendance
+- Results
+
+Should the student have to log in again every time they open another page?
+
+No. We need a way to maintain information across multiple HTTP requests.
+
+This is called **session management**.
+
+Common examples include:
+
+- Login systems
+- Shopping carts
+- Student dashboards
+- Online examination portals
+- User preferences
+- Temporary messages after form submission
 
 Two common mechanisms are:
 
-1. **Cookies:** Small pieces of data stored by the browser.
-2. **HttpSession:** A server-side session mechanism provided by the Servlet API.
+1. `HttpSession`
+2. Cookies
 
-These mechanisms are often used together.
-
----
-
-# Part 2: Understanding Cookies and Sessions
-
-## 5. How Does the Server Recognize a User?
-
-A common session-based login flow looks like this:
-
-```text
-                 BROWSER
-                    |
-                    | 1. Submit login form
-                    v
-               LOGIN SERVLET
-                    |
-                    | 2. Validate credentials
-                    |
-                    | 3. Create HttpSession
-                    v
-             SESSION ON SERVER
-                    |
-                    | 4. Server sends session ID
-                    |    in a Set-Cookie header
-                    v
-                 BROWSER
-                    |
-                    | 5. Browser stores cookie
-                    |
-                    | 6. Sends session ID with
-                    |    subsequent requests
-                    v
-               JAVA SERVLET
-                    |
-                    | 7. Container finds the session
-                    v
-             USER RECOGNIZED
-```
-
-For the standard cookie-based session tracking mechanism, the cookie is commonly named:
-
-```text
-JSESSIONID
-```
-
-For example:
-
-```http
-Set-Cookie: JSESSIONID=ABC123XYZ
-```
-
-The value above is illustrative. A real session ID is generated by the servlet container and should be unpredictable.
-
-On subsequent requests, the browser may send:
-
-```http
-Cookie: JSESSIONID=ABC123XYZ
-```
-
-The servlet container uses that identifier to locate the corresponding server-side session.
-
-**Important:** The browser normally stores the session ID, not all the session's server-side attributes.
+They are related, but they are not the same thing.
 
 ---
 
-# Part 3: HttpSession
+# Part 2: Understanding `HttpSession`
 
-## 6. What Is `HttpSession`?
+## 4. What Is `HttpSession`?
 
-`HttpSession` is an interface in the Jakarta Servlet API used to maintain server-side state associated with a client session.
+`HttpSession` is an interface provided by the Servlet API that allows a web application to store information associated with a user's session across multiple requests.
 
-Import it using:
+For example, after login, we might store:
 
 ```java
-import jakarta.servlet.http.HttpSession;
+session.setAttribute("username", "Rahul");
 ```
 
-With `HttpSession`, you can store data such as:
+When the user opens another page, we can retrieve that information:
+
+```java
+String username =
+        (String) session.getAttribute("username");
+```
+
+The servlet container manages the session.
+
+In a typical Servlet application, the browser receives a session identifier in a cookie such as:
 
 ```text
-loggedInUser = "Rahul"
-role = "STUDENT"
-cartCount = 3
+JSESSIONID=ABC123XYZ
 ```
 
-This information is stored as session attributes on the server.
+The browser sends that identifier with subsequent requests, allowing the container to associate those requests with the existing session.
 
-The browser usually carries a session identifier that allows the server to find the appropriate session.
+The identifier is just a reference to the session. The session attributes are maintained by the server, not normally stored directly in the session cookie.
 
-## 7. Important HttpSession Methods
+> **Important:** Do not store passwords or other sensitive secrets in session attributes unnecessarily. Session identifiers should be protected because someone who steals a valid session identifier may be able to impersonate the session owner.
+
+## 5. How `HttpSession` Works
+
+Consider this flow:
+
+```text
+                 Browser
+                    |
+                    | 1. Request login page
+                    v
+                Login JSP
+                    |
+                    | 2. Submit username
+                    v
+               Login Servlet
+                    |
+                    | 3. Create/get session
+                    |    session.setAttribute(...)
+                    v
+              Servlet Container
+                    |
+                    | 4. Session ID cookie
+                    |    JSESSIONID=...
+                    v
+                 Browser
+                    |
+                    | 5. Request another page
+                    |    Cookie: JSESSIONID=...
+                    v
+             Dashboard Servlet
+                    |
+                    | 6. Read session attribute
+                    v
+              Dashboard JSP
+```
+
+The browser normally stores the session identifier. The actual session data is maintained by the server.
+
+## 6. Important `HttpSession` Methods
 
 | Method | Purpose |
 |---|---|
-| `request.getSession()` | Returns the current session or creates one |
-| `request.getSession(false)` | Returns the existing session, or `null` if none exists |
-| `session.setAttribute(name, value)` | Stores or replaces an attribute |
+| `request.getSession()` | Returns the existing session or creates one |
+| `request.getSession(false)` | Returns the existing session or `null` |
+| `session.setAttribute(name, value)` | Stores an object in the session |
 | `session.getAttribute(name)` | Reads an attribute |
 | `session.removeAttribute(name)` | Removes an attribute |
+| `session.invalidate()` | Invalidates the current session |
 | `session.getId()` | Returns the session identifier |
-| `session.isNew()` | Indicates whether the session is considered new |
-| `session.getCreationTime()` | Returns the session creation time in milliseconds |
-| `session.getLastAccessedTime()` | Returns the last-access time in milliseconds |
-| `session.setMaxInactiveInterval(seconds)` | Sets the inactivity timeout in seconds |
-| `session.getMaxInactiveInterval()` | Gets the configured inactivity timeout |
-| `session.invalidate()` | Invalidates the session and removes its session attributes |
+| `session.isNew()` | Indicates whether the session was newly created for this request |
+| `session.setMaxInactiveInterval(seconds)` | Sets the maximum inactive interval in seconds |
+| `session.getMaxInactiveInterval()` | Gets the configured inactive interval |
 
----
-
-## 8. Creating a Session
-
-```java
-HttpSession session = request.getSession();
-```
-
-This statement does two things:
-
-- If a valid session already exists, it returns that session.
-- If no session exists, it creates one.
-
-Example:
+### Example: Creating a session
 
 ```java
 HttpSession session = request.getSession();
 
 session.setAttribute("username", "Rahul");
+session.setAttribute("course", "Java");
 ```
 
-The attribute `username` is now associated with that session.
+We now have two attributes associated with the session.
 
-### Why is it called an attribute?
-
-An attribute is a named piece of data stored in the session.
-
-Here:
+### Example: Reading session data
 
 ```java
-session.setAttribute("username", "Rahul");
-```
+HttpSession session = request.getSession(false);
 
-- `"username"` is the attribute name.
-- `"Rahul"` is the attribute value.
-
-You can store objects as session attributes, not just strings.
-
-For example:
-
-```java
-session.setAttribute("cartCount", 3);
-```
-
-```java
-session.setAttribute("student", studentObject);
-```
-
-Session attributes should generally be objects that are safe to retain for the lifetime of a session.
-
----
-
-## 9. Reading Session Data
-
-```java
-String username = (String) session.getAttribute("username");
-```
-
-`getAttribute()` returns an `Object`, so we cast it to `String` because we stored a string.
-
-If the attribute does not exist, `getAttribute()` returns `null`.
-
-A safer example is:
-
-```java
-Object value = session.getAttribute("username");
-
-if (value instanceof String) {
-    String username = (String) value;
-
-    System.out.println(username);
+if (session != null) {
+    String username =
+            (String) session.getAttribute("username");
 }
 ```
 
-Never assume that an attribute exists unless your application has verified it.
+We use `getSession(false)` when we want to check for an existing session without creating a new one.
 
----
-
-## 10. Updating Session Data
-
-Suppose the session currently contains:
-
-```java
-session.setAttribute("username", "Rahul");
-```
-
-You can update the value by calling `setAttribute()` with the same attribute name:
-
-```java
-session.setAttribute("username", "Aman");
-```
-
-The value associated with `"username"` is now `"Aman"`.
-
-You do not need a separate update method.
-
----
-
-## 11. Removing an Attribute
-
-```java
-session.removeAttribute("username");
-```
-
-This removes the `username` attribute.
-
-It does not invalidate the entire session.
-
-For example, the session may still contain:
-
-```text
-cartCount = 3
-theme = dark
-```
-
-Removing one attribute affects only that attribute.
-
----
-
-## 12. Invalidating a Session
-
-```java
-session.invalidate();
-```
-
-This invalidates the session.
-
-After invalidation:
-
-- The session is no longer valid.
-- Its session attributes are removed.
-- Attempts to use the invalidated session as a valid session will fail.
-- A later request may create a new session if needed.
-
-This is commonly used during logout.
-
-Example:
+### Example: Logging out
 
 ```java
 HttpSession session = request.getSession(false);
@@ -350,297 +215,18 @@ if (session != null) {
 }
 ```
 
-We use `getSession(false)` so that logging out does not create a new session just to invalidate it.
+Invalidating a session ends that session and makes its attributes unavailable.
 
 ---
 
-## 13. Configuring the Session Timeout
+# Part 3: Complete Project Using `HttpSession`
 
-You can configure the inactivity timeout for a session:
+## 7. Project File Structure
 
-```java
-session.setMaxInactiveInterval(600);
-```
-
-The value is in seconds.
-
-Here:
+Create a Maven Web Application in IntelliJ IDEA.
 
 ```text
-600 seconds = 10 minutes
-```
-
-If the session remains inactive for the configured period, the servlet container can invalidate it.
-
-You can inspect the configured interval using:
-
-```java
-int timeout = session.getMaxInactiveInterval();
-```
-
-### Important distinction
-
-A session inactivity timeout is not necessarily the same as an absolute maximum login duration. A session can remain active while requests continue to access it, depending on the container's session management behavior.
-
----
-
-# Part 4: Cookie
-
-## 14. What Is a Cookie?
-
-A cookie is a small piece of data that a website asks the browser to store.
-
-The browser can send that cookie back to the website on subsequent matching requests, subject to its scope and cookie policies.
-
-Common uses include:
-
-- Session identifiers.
-- Remembering non-sensitive preferences.
-- Tracking a language preference.
-- Storing a theme preference.
-- Supporting certain authentication flows.
-
-In Java Servlets, cookies are represented by the `Cookie` class.
-
-Import it using:
-
-```java
-import jakarta.servlet.http.Cookie;
-```
-
-## 15. Creating a Cookie
-
-Example:
-
-```java
-Cookie cookie = new Cookie("username", "Rahul");
-
-response.addCookie(cookie);
-```
-
-Here:
-
-- `"username"` is the cookie name.
-- `"Rahul"` is the cookie value.
-- `response.addCookie(cookie)` adds the cookie to the HTTP response.
-
-The browser receives a response header similar to:
-
-```http
-Set-Cookie: username=Rahul
-```
-
-The exact header may contain additional attributes.
-
-## 16. Setting Cookie Properties
-
-### Set the path
-
-```java
-cookie.setPath("/");
-```
-
-The path determines which URL paths are eligible to receive the cookie.
-
-### Set the maximum age
-
-```java
-cookie.setMaxAge(3600);
-```
-
-The cookie is configured to expire after approximately one hour.
-
-The value is in seconds.
-
-Other useful values:
-
-```java
-cookie.setMaxAge(60);    // About one minute
-cookie.setMaxAge(86400); // About one day
-cookie.setMaxAge(-1);    // Browser-session cookie
-cookie.setMaxAge(0);     // Request deletion of the cookie
-```
-
-A browser-session cookie is not guaranteed to disappear immediately when a browser window closes; browser session restoration can affect its lifetime.
-
-### Set HttpOnly
-
-```java
-cookie.setHttpOnly(true);
-```
-
-This instructs supporting browsers not to expose the cookie through ordinary JavaScript cookie access.
-
-It is especially important for cookies that contain session identifiers.
-
-### Set Secure
-
-```java
-cookie.setSecure(true);
-```
-
-This instructs the browser to send the cookie only over secure connections.
-
-Enable it in production over HTTPS. For local HTTP development, the cookie generally will not be sent if this flag is enabled.
-
-### Set SameSite
-
-The Servlet `Cookie` API version used here does not provide a portable `setSameSite()` method. SameSite support depends on the servlet container and the API available in the project.
-
-For production applications, configure SameSite using the supported container or framework configuration. Do not manually construct arbitrary cookie headers without understanding header encoding and security requirements.
-
----
-
-## 17. Reading Cookies
-
-The servlet receives cookies through the request:
-
-```java
-Cookie[] cookies = request.getCookies();
-```
-
-The result may be `null` if the request contains no cookies.
-
-Example:
-
-```java
-Cookie[] cookies = request.getCookies();
-
-if (cookies != null) {
-
-    for (Cookie cookie : cookies) {
-
-        if ("username".equals(cookie.getName())) {
-
-            String username = cookie.getValue();
-
-            System.out.println(username);
-        }
-    }
-}
-```
-
-The loop examines each cookie and finds the one whose name is `username`.
-
-**Important:** Cookies are client-controlled input. Never treat a cookie value as proof of identity or authorization merely because the browser sent it.
-
----
-
-## 18. Updating a Cookie
-
-To update a cookie, send a new cookie with the same name and path, using the updated value.
-
-```java
-Cookie cookie = new Cookie("theme", "dark");
-
-cookie.setPath("/");
-cookie.setMaxAge(86400);
-
-response.addCookie(cookie);
-```
-
-If an existing cookie with the same name, domain, and path is present, the browser generally replaces it.
-
-Cookie identity depends on its name, domain, and path, so matching those attributes matters when updating or deleting it.
-
----
-
-## 19. Deleting a Cookie
-
-To request deletion of a cookie, send another cookie with the same name and matching scope, with a maximum age of zero.
-
-```java
-Cookie cookie = new Cookie("username", "");
-
-cookie.setPath("/");
-cookie.setMaxAge(0);
-
-response.addCookie(cookie);
-```
-
-This instructs the browser to remove the matching cookie.
-
-### Important
-
-Deleting a cookie from the browser is not the same as invalidating an `HttpSession` on the server.
-
-For logout, invalidate the server-side session as well.
-
----
-
-# Part 5: HttpSession vs Cookie
-
-## 20. Comparison Table
-
-| Feature | `HttpSession` | `Cookie` |
-|---|---|---|
-| Main location of data | Server | Browser |
-| Java API | `HttpSession` | `Cookie` |
-| Typical purpose | Store server-side session attributes | Store small client-side values or session identifiers |
-| Data size | Depends on server resources and application limits | Small; browsers impose cookie limits |
-| Lifetime | Controlled by session lifecycle and timeout | Controlled by cookie expiry and browser behavior |
-| Sent with every matching request? | Session attributes are not sent directly; a session identifier is usually sent in a cookie | Yes, when the cookie matches the request and browser policies permit it |
-| User can inspect/change stored data? | Not directly through ordinary cookie editing, although server-side data must still be protected | Generally yes |
-| Sensitive data | Can hold sensitive server-side state, with appropriate protections | Do not store passwords or sensitive secrets in ordinary cookies |
-| Typical logout action | Invalidate the session | Optionally expire a related cookie |
-| Works together? | Yes | Yes |
-
-## 21. Do HttpSession and Cookie Work Together?
-
-Yes.
-
-In a typical Servlet application, the server stores user-related attributes in `HttpSession`, while the browser stores a session ID in a cookie such as `JSESSIONID`.
-
-For example:
-
-```java
-HttpSession session = request.getSession();
-
-session.setAttribute("username", "Rahul");
-```
-
-The server stores the `username` attribute in the session.
-
-The browser usually receives a session ID in a cookie.
-
-On later requests, the browser sends that ID, allowing the servlet container to locate the corresponding session.
-
-Therefore:
-
-- `HttpSession` is the server-side session abstraction.
-- A cookie is one common mechanism for transporting the session identifier between the browser and server.
-
-Session tracking can also use other mechanisms, but cookie-based session tracking is the normal approach for browser applications.
-
----
-
-# Part 6: Complete Practical Project
-
-## 22. Project Scenario
-
-We will create a simple application with the following features:
-
-1. A login form.
-2. A login servlet that checks demo credentials.
-3. An `HttpSession` storing the logged-in username.
-4. A dashboard that reads session data.
-5. A cookie servlet that creates and reads a theme cookie.
-6. A logout servlet that invalidates the session.
-7. A page showing how session and cookie values behave.
-
-For this demonstration, use:
-
-```text
-Username: rahul
-Password: java123
-```
-
-These are demonstration credentials only. A real application must authenticate against a secure user store, hash passwords appropriately, and use HTTPS.
-
-## 23. Complete Project Structure
-
-```text
-servlet-demo/
+session-management-demo/
 │
 ├── pom.xml
 │
@@ -650,29 +236,36 @@ servlet-demo/
         │   └── servlet/
         │       ├── LoginServlet.java
         │       ├── DashboardServlet.java
-        │       ├── CookieServlet.java
         │       └── LogoutServlet.java
         │
         └── webapp/
-            ├── index.html
+            ├── index.jsp
+            ├── dashboard.jsp
+            ├── login-error.jsp
             │
             └── WEB-INF/
                 └── web.xml
 ```
 
-All Java classes use one package:
+We will keep all Java classes in the same package:
 
 ```java
 package servlet;
 ```
 
----
+The JSP pages display the user interface. The Servlets process requests and manage the session.
 
-## 24. Maven Configuration — `pom.xml`
+This example uses hardcoded demonstration credentials. It is for learning session management, not for production authentication.
 
-File location:
+## 8. Maven Configuration — `pom.xml`
 
-`pom.xml`
+Location:
+
+```text
+session-management-demo/pom.xml
+```
+
+Complete code:
 
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
@@ -686,7 +279,7 @@ File location:
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>com.example</groupId>
-    <artifactId>servlet-demo</artifactId>
+    <artifactId>session-management-demo</artifactId>
     <version>1.0-SNAPSHOT</version>
 
     <packaging>war</packaging>
@@ -697,18 +290,21 @@ File location:
     </properties>
 
     <dependencies>
+
         <dependency>
             <groupId>jakarta.servlet</groupId>
             <artifactId>jakarta.servlet-api</artifactId>
             <version>6.0.0</version>
             <scope>provided</scope>
         </dependency>
+
     </dependencies>
 
     <build>
-        <finalName>servlet-demo</finalName>
+        <finalName>session-management-demo</finalName>
 
         <plugins>
+
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
@@ -720,6 +316,7 @@ File location:
                 <artifactId>maven-war-plugin</artifactId>
                 <version>3.4.0</version>
             </plugin>
+
         </plugins>
     </build>
 
@@ -728,21 +325,27 @@ File location:
 
 ### Explanation
 
-- `packaging=war` identifies the project as a Java web application.
-- `jakarta.servlet-api` supplies Servlet API types during compilation.
-- `scope=provided` means the runtime container supplies the API.
-- Java 17 is the project's compilation target.
-- Tomcat 10.1 uses Jakarta Servlet 6.0.
+- `packaging=war` packages the project as a Java web application.
+- `jakarta.servlet-api` provides the Servlet API during compilation.
+- `scope=provided` means Tomcat provides the API at runtime.
+- Java 17 is the compilation target.
+- Tomcat 10.1 uses the `jakarta.servlet.*` package.
 
 ---
 
-## 25. Login Form — `index.html`
+## 9. Login Page — `index.jsp`
 
-File location:
+Location:
 
-`src/main/webapp/index.html`
+```text
+src/main/webapp/index.jsp
+```
 
-```html
+Complete code:
+
+```jsp
+<%@ page contentType="text/html;charset=UTF-8" language="java" %>
+
 <!DOCTYPE html>
 <html lang="en">
 
@@ -750,14 +353,18 @@ File location:
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-    <title>Servlet Session Management</title>
+    <title>Student Login</title>
 </head>
 
 <body>
 
-    <h1>Login</h1>
+    <h1>Student Login</h1>
 
-    <form action="login" method="post">
+    <p>Demo username: rahul</p>
+    <p>Demo password: java123</p>
+
+    <form action="${pageContext.request.contextPath}/login"
+          method="post">
 
         <div>
             <label for="username">Username:</label>
@@ -789,14 +396,6 @@ File location:
 
     </form>
 
-    <hr>
-
-    <h2>Cookie Demonstration</h2>
-
-    <p>
-        <a href="cookie">Create or read the theme cookie</a>
-    </p>
-
 </body>
 
 </html>
@@ -804,23 +403,54 @@ File location:
 
 ### Explanation
 
-The form uses:
+**JSP directive**
 
-```html
-<form action="login" method="post">
+```jsp
+<%@ page contentType="text/html;charset=UTF-8" language="java" %>
 ```
 
-The browser submits the form to the `/login` endpoint using POST.
+This tells the JSP engine to generate an HTML response using UTF-8 encoding.
 
-The `name` attributes are important because the servlet reads the submitted values using `request.getParameter()`.
+**Form action**
+
+```jsp
+action="${pageContext.request.contextPath}/login"
+```
+
+This builds the login URL using the application's context path. If the context path is `/session-management-demo`, the action becomes:
+
+```text
+/session-management-demo/login
+```
+
+**Form method**
+
+```html
+method="post"
+```
+
+The browser submits the form using HTTP POST.
+
+**Input names**
+
+```html
+name="username"
+name="password"
+```
+
+These names become request parameters that the servlet can read.
 
 ---
 
-## 26. Login Servlet — `LoginServlet.java`
+## 10. Login Servlet — `LoginServlet.java`
 
-File location:
+Location:
 
-`src/main/java/servlet/LoginServlet.java`
+```text
+src/main/java/servlet/LoginServlet.java
+```
+
+Complete code:
 
 ```java
 package servlet;
@@ -846,145 +476,43 @@ public class LoginServlet extends HttpServlet {
         String username = request.getParameter("username");
         String password = request.getParameter("password");
 
-        // Demonstration-only credentials.
-        boolean validUser =
+        // Demonstration credentials only.
+        boolean validLogin =
                 "rahul".equals(username)
                 && "java123".equals(password);
 
-        if (!validUser) {
+        if (validLogin) {
 
-            response.sendError(
-                    HttpServletResponse.SC_UNAUTHORIZED,
-                    "Invalid username or password."
+            /*
+             * Create a new session identifier after authentication.
+             * This helps reduce session-fixation risk.
+             */
+            request.changeSessionIdIfAvailable();
+
+            HttpSession session = request.getSession();
+
+            session.setAttribute("username", username);
+            session.setAttribute("course", "Java");
+
+            // Redirect to the dashboard.
+            response.sendRedirect(
+                    request.getContextPath() + "/dashboard"
             );
-
-            return;
-        }
-
-        /*
-         * If an anonymous session already exists, rotate its ID
-         * before using it for authenticated state.
-         */
-        HttpSession existingSession = request.getSession(false);
-
-        HttpSession session;
-
-        if (existingSession != null) {
-
-            request.changeSessionId();
-            session = existingSession;
 
         } else {
 
-            session = request.getSession();
+            response.sendRedirect(
+                    request.getContextPath() + "/login-error.jsp"
+            );
+
         }
-
-        // Store authenticated user information on the server.
-        session.setAttribute("loggedInUser", username);
-
-        // Store the role as another session attribute.
-        session.setAttribute("role", "STUDENT");
-
-        // Set a 15-minute inactivity timeout.
-        session.setMaxInactiveInterval(15 * 60);
-
-        // Redirect to the dashboard using HTTP 303.
-        response.setStatus(HttpServletResponse.SC_SEE_OTHER);
-
-        response.setHeader(
-                "Location",
-                response.encodeRedirectURL(
-                        request.getContextPath() + "/dashboard"
-                )
-        );
     }
 }
 ```
 
-### Line-by-line explanation
+### Important correction for the code above
 
-#### Read the submitted values
-
-```java
-String username = request.getParameter("username");
-String password = request.getParameter("password");
-```
-
-These values come from the HTML form.
-
-#### Validate the demo credentials
-
-```java
-boolean validUser =
-        "rahul".equals(username)
-        && "java123".equals(password);
-```
-
-This is only a classroom demonstration. Never hardcode production credentials.
-
-Using the constant string's `equals()` method also avoids a `NullPointerException` if the submitted value is missing.
-
-#### Find the existing session
-
-```java
-HttpSession existingSession = request.getSession(false);
-```
-
-This checks whether the browser already has an associated session without creating a new one.
-
-#### Change the session ID after login
-
-```java
-request.changeSessionId();
-```
-
-If an existing session is present, this changes its ID while retaining its session data. Rotating the ID after authentication helps mitigate session-fixation attacks.
-
-#### Store user data
-
-```java
-session.setAttribute("loggedInUser", username);
-session.setAttribute("role", "STUDENT");
-```
-
-The username and role are stored on the server.
-
-#### Configure timeout
-
-```java
-session.setMaxInactiveInterval(15 * 60);
-```
-
-This configures a 15-minute inactivity interval.
-
-#### Redirect to the dashboard
-
-```java
-response.setStatus(HttpServletResponse.SC_SEE_OTHER);
-```
-
-This sets the status to 303.
-
-```java
-response.setHeader(
-        "Location",
-        response.encodeRedirectURL(
-                request.getContextPath() + "/dashboard"
-        )
-);
-```
-
-This directs the browser to the dashboard using the application's context path.
-
-`encodeRedirectURL()` allows the container to encode the URL if URL-based session tracking is needed and supported by the configuration. With normal cookie-based tracking, it generally leaves the URL unchanged.
-
----
-
-## 27. Dashboard Servlet — `DashboardServlet.java`
-
-File location:
-
-`src/main/java/servlet/DashboardServlet.java`
+`HttpServletRequest` does **not** have a standard method named `changeSessionIdIfAvailable()`. Use the following correct, complete `LoginServlet.java` instead. It changes an existing session ID only if the request already has a session, and otherwise creates a new session after validating the credentials.
 
 ```java
 package servlet;
@@ -997,7 +525,128 @@ import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
 
 import java.io.IOException;
-import java.io.PrintWriter;
+
+@WebServlet("/login")
+public class LoginServlet extends HttpServlet {
+
+    @Override
+    protected void doPost(
+            HttpServletRequest request,
+            HttpServletResponse response
+    ) throws ServletException, IOException {
+
+        String username = request.getParameter("username");
+        String password = request.getParameter("password");
+
+        // Demonstration credentials only.
+        boolean validLogin =
+                "rahul".equals(username)
+                && "java123".equals(password);
+
+        if (validLogin) {
+
+            HttpSession existingSession = request.getSession(false);
+
+            if (existingSession != null) {
+                // Rotate the session ID after successful authentication.
+                request.changeSessionId();
+            }
+
+            HttpSession session = request.getSession();
+
+            session.setAttribute("username", username);
+            session.setAttribute("course", "Java");
+
+            response.sendRedirect(
+                    request.getContextPath() + "/dashboard"
+            );
+
+        } else {
+
+            response.sendRedirect(
+                    request.getContextPath() + "/login-error.jsp"
+            );
+
+        }
+    }
+}
+```
+
+### Explanation
+
+#### Step 1: Read the username and password
+
+```java
+String username = request.getParameter("username");
+String password = request.getParameter("password");
+```
+
+These values come from the form fields in `index.jsp`.
+
+#### Step 2: Validate the credentials
+
+```java
+boolean validLogin =
+        "rahul".equals(username)
+        && "java123".equals(password);
+```
+
+For this demonstration, only the provided username and password are accepted.
+
+In a real application, credentials must be checked against a proper user store, passwords must be securely hashed, and login attempts should be protected against abuse.
+
+#### Step 3: Create or obtain the session
+
+```java
+HttpSession session = request.getSession();
+```
+
+If an existing session is available, it is returned. Otherwise, a new session is created.
+
+#### Step 4: Store data
+
+```java
+session.setAttribute("username", username);
+session.setAttribute("course", "Java");
+```
+
+The session now stores the username and course.
+
+These attributes remain available on later requests associated with the same session.
+
+#### Step 5: Redirect
+
+```java
+response.sendRedirect(
+        request.getContextPath() + "/dashboard"
+);
+```
+
+The browser makes a new request to the dashboard URL.
+
+---
+
+## 11. Dashboard Servlet — `DashboardServlet.java`
+
+Location:
+
+```text
+src/main/java/servlet/DashboardServlet.java
+```
+
+Complete code:
+
+```java
+package servlet;
+
+import jakarta.servlet.ServletException;
+import jakarta.servlet.annotation.WebServlet;
+import jakarta.servlet.http.HttpServlet;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import jakarta.servlet.http.HttpSession;
+
+import java.io.IOException;
 
 @WebServlet("/dashboard")
 public class DashboardServlet extends HttpServlet {
@@ -1008,389 +657,223 @@ public class DashboardServlet extends HttpServlet {
             HttpServletResponse response
     ) throws ServletException, IOException {
 
-        // Do not create a session just to check authentication.
+        // Look for an existing session without creating one.
         HttpSession session = request.getSession(false);
 
-        if (session == null) {
+        if (session == null
+                || session.getAttribute("username") == null) {
 
             response.sendRedirect(
-                    response.encodeRedirectURL(
-                            request.getContextPath() + "/"
-                    )
+                    request.getContextPath() + "/index.jsp"
             );
 
             return;
         }
 
-        Object usernameValue = session.getAttribute("loggedInUser");
-        Object roleValue = session.getAttribute("role");
-
-        if (!(usernameValue instanceof String)) {
-
-            response.sendRedirect(
-                    request.getContextPath() + "/"
-            );
-
-            return;
-        }
-
-        String username = (String) usernameValue;
-
-        String role = roleValue instanceof String
-                ? (String) roleValue
-                : "UNKNOWN";
-
-        response.setContentType("text/html;charset=UTF-8");
-
-        PrintWriter out = response.getWriter();
-
-        out.println("<!DOCTYPE html>");
-        out.println("<html lang='en'>");
-
-        out.println("<head>");
-        out.println("<meta charset='UTF-8'>");
-        out.println("<title>Dashboard</title>");
-        out.println("</head>");
-
-        out.println("<body>");
-
-        out.println("<h1>Dashboard</h1>");
-
-        out.println("<p>Welcome, "
-                + escapeHtml(username)
-                + "!</p>");
-
-        out.println("<p>Your role is: "
-                + escapeHtml(role)
-                + "</p>");
-
-        out.println("<p>Session ID: "
-                + escapeHtml(session.getId())
-                + "</p>");
-
-        out.println("<p><a href='"
-                + request.getContextPath()
-                + "/cookie'>View cookie demo</a></p>");
-
-        out.println("<form action='"
-                + request.getContextPath()
-                + "/logout' method='post'>");
-
-        out.println("<button type='submit'>Logout</button>");
-
-        out.println("</form>");
-
-        out.println("</body>");
-        out.println("</html>");
-    }
-
-    private String escapeHtml(String value) {
-
-        return value
-                .replace("&", "&amp;")
-                .replace("<", "&lt;")
-                .replace(">", "&gt;")
-                .replace("\"", "&quot;")
-                .replace("'", "&#x27;");
+        // Forward to the JSP that displays the dashboard.
+        request.getRequestDispatcher("/dashboard.jsp")
+               .forward(request, response);
     }
 }
 ```
 
 ### Explanation
 
-#### Do not create a session unnecessarily
+#### Why `getSession(false)`?
 
 ```java
 HttpSession session = request.getSession(false);
 ```
 
-If the user has no session, this returns `null`.
+We want to check whether the user already has a session.
 
-This is useful on a protected page because an unauthenticated request should not create a new session just to check whether the user is logged in.
+If we used `request.getSession()` here, a new session could be created for an unauthenticated visitor. For a protected page, checking for an existing session is usually the better choice.
 
-#### Check the authentication attribute
-
-```java
-Object usernameValue = session.getAttribute("loggedInUser");
-```
-
-The session may exist without representing an authenticated user. For example, it might have been created by another part of the application.
-
-Therefore, we check the `loggedInUser` attribute rather than assuming that the existence of a session means that the user is logged in.
-
-#### Display the session ID
+#### Check authentication state
 
 ```java
-session.getId()
+if (session == null
+        || session.getAttribute("username") == null)
 ```
 
-This is useful for classroom debugging.
+If there is no session or the expected username attribute is missing, the user is redirected to the login page.
 
-**Never display session IDs in a real user-facing page or expose them in application logs unnecessarily.** A valid session ID is a bearer credential: anyone who obtains it may be able to impersonate the associated session.
+#### Forward to JSP
+
+```java
+request.getRequestDispatcher("/dashboard.jsp")
+       .forward(request, response);
+```
+
+The servlet checks access, then forwards the same request to the JSP for rendering.
+
+This is a good separation of responsibilities:
+
+- Servlet: request processing and access checks.
+- JSP: presentation and HTML output.
 
 ---
 
-## 28. Cookie Servlet — `CookieServlet.java`
+## 12. Dashboard UI — `dashboard.jsp`
 
-File location:
+Location:
 
-`src/main/java/servlet/CookieServlet.java`
+```text
+src/main/webapp/dashboard.jsp
+```
 
-This servlet creates a theme cookie and reads it on a later request.
+Complete code:
 
-```java
-package servlet;
+```jsp
+<%@ page contentType="text/html;charset=UTF-8" language="java" %>
+<%@ page import="jakarta.servlet.http.HttpSession" %>
+<%@ page import="java.net.URLEncoder" %>
+<%@ page import="java.nio.charset.StandardCharsets" %>
 
-import jakarta.servlet.ServletException;
-import jakarta.servlet.annotation.WebServlet;
-import jakarta.servlet.http.Cookie;
-import jakarta.servlet.http.HttpServlet;
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
+<%
+    HttpSession userSession = request.getSession(false);
 
-import java.io.IOException;
-import java.io.PrintWriter;
+    if (userSession == null
+            || userSession.getAttribute("username") == null) {
 
-@WebServlet("/cookie")
-public class CookieServlet extends HttpServlet {
-
-    @Override
-    protected void doGet(
-            HttpServletRequest request,
-            HttpServletResponse response
-    ) throws ServletException, IOException {
-
-        String theme = null;
-
-        Cookie[] cookies = request.getCookies();
-
-        if (cookies != null) {
-
-            for (Cookie cookie : cookies) {
-
-                if ("theme".equals(cookie.getName())) {
-
-                    theme = cookie.getValue();
-                    break;
-                }
-            }
-        }
-
-        /*
-         * On the first visit, create a default theme cookie.
-         * On later visits, display the received value.
-         */
-        if (theme == null) {
-
-            Cookie themeCookie = new Cookie("theme", "light");
-
-            themeCookie.setPath(
-                    request.getContextPath().isEmpty()
-                            ? "/"
-                            : request.getContextPath()
-            );
-
-            themeCookie.setMaxAge(7 * 24 * 60 * 60);
-            themeCookie.setHttpOnly(true);
-
-            /*
-             * Use Secure in HTTPS production deployments.
-             * Do not enable it for ordinary HTTP localhost testing.
-             */
-
-            response.addCookie(themeCookie);
-
-            theme = "light";
-        }
-
-        response.setContentType("text/html;charset=UTF-8");
-
-        PrintWriter out = response.getWriter();
-
-        out.println("<!DOCTYPE html>");
-        out.println("<html lang='en'>");
-
-        out.println("<head>");
-        out.println("<meta charset='UTF-8'>");
-        out.println("<title>Cookie Demo</title>");
-        out.println("</head>");
-
-        out.println("<body>");
-
-        out.println("<h1>Cookie Demonstration</h1>");
-
-        out.println("<p>Current theme cookie: "
-                + escapeHtml(theme)
-                + "</p>");
-
-        out.println("<p>The theme cookie is stored in the browser.</p>");
-
-        out.println("<p><a href='"
-                + request.getContextPath()
-                + "/cookie'>Refresh cookie page</a></p>");
-
-        out.println("<form action='"
-                + request.getContextPath()
-                + "/cookie' method='post'>");
-
-        out.println("<button type='submit' name='action' "
-                + "value='dark'>Set Dark Theme</button>");
-
-        out.println("<button type='submit' name='action' "
-                + "value='light'>Set Light Theme</button>");
-
-        out.println("<button type='submit' name='action' "
-                + "value='delete'>Delete Theme Cookie</button>");
-
-        out.println("</form>");
-
-        out.println("<p><a href='"
-                + request.getContextPath()
-                + "/'>Back to login</a></p>");
-
-        out.println("</body>");
-        out.println("</html>");
-    }
-
-    @Override
-    protected void doPost(
-            HttpServletRequest request,
-            HttpServletResponse response
-    ) throws ServletException, IOException {
-
-        String action = request.getParameter("action");
-
-        String path = request.getContextPath().isEmpty()
-                ? "/"
-                : request.getContextPath();
-
-        if ("dark".equals(action) || "light".equals(action)) {
-
-            Cookie themeCookie = new Cookie("theme", action);
-
-            themeCookie.setPath(path);
-            themeCookie.setMaxAge(7 * 24 * 60 * 60);
-            themeCookie.setHttpOnly(true);
-
-            response.addCookie(themeCookie);
-
-        } else if ("delete".equals(action)) {
-
-            Cookie themeCookie = new Cookie("theme", "");
-
-            themeCookie.setPath(path);
-            themeCookie.setMaxAge(0);
-            themeCookie.setHttpOnly(true);
-
-            response.addCookie(themeCookie);
-        }
-
-        // Use PRG so refreshing does not repeat the POST.
-        response.setStatus(HttpServletResponse.SC_SEE_OTHER);
-
-        response.setHeader(
-                "Location",
-                response.encodeRedirectURL(
-                        request.getContextPath() + "/cookie"
-                )
+        response.sendRedirect(
+                request.getContextPath() + "/index.jsp"
         );
+
+        return;
     }
 
-    private String escapeHtml(String value) {
+    String username =
+            (String) userSession.getAttribute("username");
 
-        return value
-                .replace("&", "&amp;")
-                .replace("<", "&lt;")
-                .replace(">", "&gt;")
-                .replace("\"", "&quot;")
-                .replace("'", "&#x27;");
-    }
-}
+    String course =
+            (String) userSession.getAttribute("course");
+
+    String safeUsername =
+            username.replace("&", "&amp;")
+                    .replace("<", "&lt;")
+                    .replace(">", "&gt;")
+                    .replace("\"", "&quot;")
+                    .replace("'", "&#x27;");
+
+    String safeCourse =
+            course.replace("&", "&amp;")
+                  .replace("<", "&lt;")
+                  .replace(">", "&gt;")
+                  .replace("\"", "&quot;")
+                  .replace("'", "&#x27;");
+%>
+
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Student Dashboard</title>
+</head>
+
+<body>
+
+    <h1>Student Dashboard</h1>
+
+    <p>Welcome, <%= safeUsername %>!</p>
+
+    <p>Your course is: <%= safeCourse %></p>
+
+    <h2>Session Information</h2>
+
+    <p>
+        Session ID:
+        <%= userSession.getId() %>
+    </p>
+
+    <p>
+        Session is new:
+        <%= userSession.isNew() %>
+    </p>
+
+    <form action="${pageContext.request.contextPath}/logout"
+          method="post">
+
+        <button type="submit">Logout</button>
+
+    </form>
+
+</body>
+
+</html>
 ```
 
 ### Explanation
 
-#### Step 1: Read incoming cookies
+The JSP retrieves session attributes:
 
 ```java
-Cookie[] cookies = request.getCookies();
+userSession.getAttribute("username");
+userSession.getAttribute("course");
 ```
 
-The browser sends applicable cookies in the HTTP request. The servlet container exposes them through `getCookies()`.
+It then displays the values.
 
-The returned array may be `null`.
+The session ID is shown only for classroom demonstration. Avoid exposing session identifiers in real user interfaces or logs, because possession of a valid identifier can grant access to the session.
 
-#### Step 2: Find the `theme` cookie
+The JSP repeats the access check as a defensive measure, but the servlet should remain the main place for access control.
 
-```java
-if ("theme".equals(cookie.getName())) {
-    theme = cookie.getValue();
-}
-```
-
-We compare the cookie name to `theme` and read its value.
-
-#### Step 3: Create a cookie if none exists
-
-```java
-Cookie themeCookie = new Cookie("theme", "light");
-```
-
-This creates a cookie with the default value `light`.
-
-#### Step 4: Set the path
-
-```java
-themeCookie.setPath(path);
-```
-
-This scopes the cookie to the current application path.
-
-#### Step 5: Set the lifetime
-
-```java
-themeCookie.setMaxAge(7 * 24 * 60 * 60);
-```
-
-This sets a seven-day lifetime, expressed in seconds.
-
-#### Step 6: Add it to the response
-
-```java
-response.addCookie(themeCookie);
-```
-
-The browser receives a `Set-Cookie` header and can store the cookie.
-
-#### Step 7: Update or delete the cookie
-
-The POST handler sends an updated cookie for `dark` or `light`.
-
-For deletion:
-
-```java
-themeCookie.setMaxAge(0);
-```
-
-The browser is asked to remove the matching cookie.
-
-#### Step 8: Redirect after POST
-
-```java
-response.setStatus(HttpServletResponse.SC_SEE_OTHER);
-```
-
-The browser is directed to the cookie page using GET. This is the PRG pattern discussed in the previous lesson.
-
-**Security note:** This cookie is only a theme preference, not an authentication token. A user can change ordinary cookie values, so never rely on this theme cookie for access control.
+In larger applications, prefer the JSP Expression Language and JSTL rather than putting Java scriptlets directly in JSP files. Scriptlets are used here to make the underlying session operations explicit for beginners.
 
 ---
 
-## 29. Logout Servlet — `LogoutServlet.java`
+## 13. Login Error Page — `login-error.jsp`
 
-File location:
+Location:
 
-`src/main/java/servlet/LogoutServlet.java`
+```text
+src/main/webapp/login-error.jsp
+```
+
+Complete code:
+
+```jsp
+<%@ page contentType="text/html;charset=UTF-8" language="java" %>
+
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Login Failed</title>
+</head>
+
+<body>
+
+    <h1>Login Failed</h1>
+
+    <p>Invalid username or password.</p>
+
+    <a href="${pageContext.request.contextPath}/index.jsp">
+        Try Again
+    </a>
+
+</body>
+
+</html>
+```
+
+---
+
+## 14. Logout Servlet — `LogoutServlet.java`
+
+Location:
+
+```text
+src/main/java/servlet/LogoutServlet.java
+```
+
+Complete code:
 
 ```java
 package servlet;
@@ -1419,11 +902,8 @@ public class LogoutServlet extends HttpServlet {
             session.invalidate();
         }
 
-        response.setStatus(HttpServletResponse.SC_SEE_OTHER);
-
-        response.setHeader(
-                "Location",
-                request.getContextPath() + "/"
+        response.sendRedirect(
+                request.getContextPath() + "/index.jsp"
         );
     }
 }
@@ -1431,45 +911,33 @@ public class LogoutServlet extends HttpServlet {
 
 ### Explanation
 
-#### Find the existing session
-
 ```java
 HttpSession session = request.getSession(false);
 ```
 
-This avoids creating a session during logout.
-
-#### Invalidate it
+This checks for an existing session without creating a new one.
 
 ```java
-if (session != null) {
-    session.invalidate();
-}
+session.invalidate();
 ```
 
-This invalidates the session on the server.
+This invalidates the session, ending the server-side session associated with that identifier.
 
-The session attributes, including `loggedInUser`, are no longer available through that session.
+The browser may still temporarily have the old session cookie. However, that old identifier should no longer resolve to the invalidated session. If a later request creates a new session, the browser may receive a new session identifier.
 
-#### Redirect to the login page
-
-The browser receives a 303 redirect and then requests the application root.
-
-### Does logout need to delete `JSESSIONID` manually?
-
-Not necessarily.
-
-Invalidating the session on the server is the essential step for invalidating that session. The browser may still hold a cookie containing the old session ID, but that ID should no longer identify a valid session.
-
-Applications may also expire the session cookie when appropriate, but they must match its configured scope and should rely on the servlet container's session management configuration where possible.
+Finally, the browser is redirected to the login page.
 
 ---
 
-## 30. Web Application Configuration — `web.xml`
+## 15. Optional `web.xml`
 
-File location:
+Location:
 
-`src/main/webapp/WEB-INF/web.xml`
+```text
+src/main/webapp/WEB-INF/web.xml
+```
+
+Complete code:
 
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
@@ -1481,326 +949,808 @@ File location:
          https://jakarta.ee/xml/ns/jakartaee/web-app_6_0.xsd"
          version="6.0">
 
-    <display-name>Servlet Session Management</display-name>
+    <display-name>Session Management Demo</display-name>
+
+    <session-config>
+        <session-timeout>20</session-timeout>
+        <cookie-config>
+            <http-only>true</http-only>
+        </cookie-config>
+    </session-config>
 
 </web-app>
 ```
 
-All four servlets use `@WebServlet`, so additional servlet mappings are not required here.
+### Explanation
+
+`session-timeout` is measured in minutes. Here, the session's default inactivity timeout is 20 minutes.
+
+`http-only` means client-side JavaScript cannot read the session cookie through the usual `document.cookie` API.
+
+For production applications served over HTTPS, also configure secure cookie behavior and review the `SameSite` policy.
 
 ---
 
-# Part 7: Run the Application
+# Part 4: Running the `HttpSession` Project
 
-## 31. Configure IntelliJ IDEA and Smart Tomcat
+## 16. Configure IntelliJ IDEA and Smart Tomcat
 
-1. Open the project in IntelliJ IDEA.
-2. Wait for Maven dependencies to load.
-3. Make sure Java 17 is configured for the project.
-4. Install or enable Smart Tomcat if necessary.
-5. Install Tomcat 10.1 locally.
+1. Open the Maven project in IntelliJ IDEA.
+2. Reload Maven dependencies.
+3. Ensure Java 17 is configured.
+4. Install Tomcat 10.1.
+5. Enable the Smart Tomcat plugin.
 6. Create a Smart Tomcat run configuration.
-7. Select the Tomcat installation and the correct web application or module.
-8. Set the context path to `/servlet-demo` if the configuration exposes that option.
-9. Run the application.
+7. Configure the Tomcat installation and application context path.
+8. Start Tomcat.
 
-### Build the project
-
-Run:
+Build the application:
 
 ```bash
 mvn clean package
 ```
 
-The WAR file will be generated at:
+Expected WAR file:
 
 ```text
-target/servlet-demo.war
+target/session-management-demo.war
 ```
 
-To generate an exploded WAR as well:
+The context path depends on the Smart Tomcat run configuration. If you set it to `/session-management-demo`, open:
 
-```bash
-mvn clean package war:exploded
+```text
+http://localhost:8080/session-management-demo/
 ```
 
-Smart Tomcat's deployment details vary by plugin version. Use the deployment directory and context path configured in the run configuration.
+### Test sequence
+
+1. Enter username `rahul`.
+2. Enter password `java123`.
+3. Click Login.
+4. Observe the dashboard.
+5. Open another tab in the same browser and revisit the dashboard URL.
+6. The same browser session should normally be recognized.
+7. Click Logout.
+8. Try opening the dashboard again.
+9. You should be redirected to the login page.
 
 ---
 
-## 32. Test the Login Flow
+# Part 5: Understanding Cookies
 
-Open:
+## 17. What Is a Cookie?
 
-```text
-http://localhost:8080/servlet-demo/
+A **cookie** is a small piece of data that a server asks the browser to store.
+
+For example, a server can send this response header:
+
+```http
+Set-Cookie: theme=dark; Path=/
 ```
 
-Enter:
+The browser stores the cookie according to its attributes and policies.
 
-```text
-Username: rahul
-Password: java123
+When a later request matches the cookie's scope, the browser may send:
+
+```http
+Cookie: theme=dark
 ```
 
-Click **Login**.
+Cookies are often used for:
 
-Expected sequence:
+- Session identifiers
+- Language preferences
+- Theme preferences
+- Remembering non-sensitive settings
+- Certain tracking or analytics purposes
 
-```text
-POST /servlet-demo/login
-          |
-          v
-Validate credentials
-          |
-          v
-Create or reuse session
-          |
-          v
-Store loggedInUser and role
-          |
-          v
-Return 303 See Other
-          |
-          v
-GET /servlet-demo/dashboard
-          |
-          v
-Display dashboard
-```
+Cookies are stored on the client side, usually in the browser's cookie storage. They should not be treated as trusted data: a client can modify ordinary cookie values.
 
-The dashboard should show:
+## 18. How Cookies Work
 
 ```text
-Welcome, rahul!
-Your role is: STUDENT
+             Browser
+                |
+                | 1. Request a page
+                v
+             Servlet
+                |
+                | 2. Create a cookie
+                |    theme=dark
+                v
+             Response
+                |
+                | 3. Set-Cookie header
+                v
+             Browser
+                |
+                | 4. Store cookie
+                |
+                | 5. Make another request
+                |    Cookie: theme=dark
+                v
+             Servlet
+                |
+                | 6. Read the cookie
+                v
+          Display preference
 ```
 
-The session ID is displayed for demonstration only.
+The server sets a cookie using the `Set-Cookie` response header. The browser later sends matching cookies using the `Cookie` request header.
 
-## 33. Test the Session
+## 19. Important `Cookie` Methods
 
-1. Log in.
-2. Open `/servlet-demo/dashboard`.
-3. Refresh the dashboard.
-4. The logged-in username should still be available.
-5. Click Logout.
-6. Try to open `/servlet-demo/dashboard` again.
-7. The application should redirect you to the login page.
+In the Servlet API, `jakarta.servlet.http.Cookie` represents a cookie.
 
-This demonstrates how the session keeps server-side state across requests and how invalidation ends the session.
+| Method | Purpose |
+|---|---|
+| `new Cookie(name, value)` | Creates a cookie |
+| `response.addCookie(cookie)` | Adds a cookie to the response |
+| `request.getCookies()` | Retrieves cookies sent with the request |
+| `cookie.getName()` | Reads the cookie's name |
+| `cookie.getValue()` | Reads the cookie's value |
+| `cookie.setMaxAge(seconds)` | Sets the cookie's lifetime |
+| `cookie.setPath(path)` | Sets the cookie's path |
+| `cookie.setHttpOnly(true)` | Prevents ordinary client-side JavaScript access |
+| `cookie.setSecure(true)` | Sends the cookie only over secure HTTPS connections |
+| `cookie.setAttribute("SameSite", "Lax")` | Sets the SameSite attribute in Servlet 6.0 |
 
-## 34. Test the Cookie
+### Session cookie vs persistent cookie
 
-Open:
+A cookie with no explicit `Max-Age` or `Expires` is generally a browser-session cookie, although exact persistence behavior depends on the browser.
+
+A cookie with a positive `Max-Age` is intended to persist for that many seconds.
+
+Example:
+
+```java
+Cookie cookie = new Cookie("theme", "dark");
+
+cookie.setMaxAge(7 * 24 * 60 * 60);
+cookie.setPath("/");
+
+response.addCookie(cookie);
+```
+
+This requests a cookie that lasts for seven days.
+
+---
+
+# Part 6: Complete Cookie Example Using a JSP
+
+We will build a small theme preference feature.
+
+The user chooses `light` or `dark`. The Servlet stores the choice in a cookie, then redirects to a JSP page. The JSP displays the preference.
+
+## 20. Cookie Project File Structure
+
+Add these files to the same Maven project:
 
 ```text
-http://localhost:8080/servlet-demo/cookie
+session-management-demo/
+│
+├── pom.xml
+│
+└── src/
+    └── main/
+        ├── java/
+        │   └── servlet/
+        │       ├── ThemeServlet.java
+        │       └── ClearThemeServlet.java
+        │
+        └── webapp/
+            ├── theme.jsp
+            └── theme-result.jsp
 ```
 
-On the first visit, the application creates a `theme=light` cookie.
+The earlier `HttpSession` files remain in the project.
 
-Refresh the page. The servlet should read the cookie sent by the browser.
+## 21. Theme Form — `theme.jsp`
 
-Try the buttons:
+Location:
 
-- Set Dark Theme.
-- Set Light Theme.
-- Delete Theme Cookie.
+```text
+src/main/webapp/theme.jsp
+```
 
-The page redirects back to itself after each POST.
+Complete code:
 
-To inspect cookies in Chrome:
+```jsp
+<%@ page contentType="text/html;charset=UTF-8" language="java" %>
+
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Theme Preference</title>
+</head>
+
+<body>
+
+    <h1>Choose Your Theme</h1>
+
+    <form action="${pageContext.request.contextPath}/theme"
+          method="post">
+
+        <label for="theme">Select a theme:</label>
+
+        <select id="theme" name="theme" required>
+            <option value="light">Light</option>
+            <option value="dark">Dark</option>
+        </select>
+
+        <button type="submit">Save Preference</button>
+
+    </form>
+
+    <p>
+        <a href="${pageContext.request.contextPath}/theme-result.jsp">
+            View Saved Preference
+        </a>
+    </p>
+
+</body>
+
+</html>
+```
+
+The form submits the selected value using POST.
+
+For example:
+
+```text
+theme=dark
+```
+
+## 22. Create the Cookie — `ThemeServlet.java`
+
+Location:
+
+```text
+src/main/java/servlet/ThemeServlet.java
+```
+
+Complete code:
+
+```java
+package servlet;
+
+import jakarta.servlet.ServletException;
+import jakarta.servlet.annotation.WebServlet;
+import jakarta.servlet.http.Cookie;
+import jakarta.servlet.http.HttpServlet;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+
+import java.io.IOException;
+
+@WebServlet("/theme")
+public class ThemeServlet extends HttpServlet {
+
+    @Override
+    protected void doPost(
+            HttpServletRequest request,
+            HttpServletResponse response
+    ) throws ServletException, IOException {
+
+        String theme = request.getParameter("theme");
+
+        // Accept only the values supported by the application.
+        if (!"light".equals(theme) && !"dark".equals(theme)) {
+
+            response.sendError(
+                    HttpServletResponse.SC_BAD_REQUEST,
+                    "Invalid theme."
+            );
+
+            return;
+        }
+
+        Cookie themeCookie = new Cookie("theme", theme);
+
+        // Keep the cookie for seven days.
+        themeCookie.setMaxAge(7 * 24 * 60 * 60);
+
+        // Send the cookie for the application path.
+        themeCookie.setPath(request.getContextPath().isEmpty()
+                ? "/"
+                : request.getContextPath());
+
+        // Prevent ordinary JavaScript access.
+        themeCookie.setHttpOnly(true);
+
+        // Add this attribute when the application is served over HTTPS.
+        themeCookie.setSecure(request.isSecure());
+
+        // Configure SameSite in Servlet 6.0.
+        themeCookie.setAttribute("SameSite", "Lax");
+
+        response.addCookie(themeCookie);
+
+        response.sendRedirect(
+                request.getContextPath() + "/theme-result.jsp"
+        );
+    }
+}
+```
+
+### Explanation
+
+#### Create a cookie
+
+```java
+Cookie themeCookie = new Cookie("theme", theme);
+```
+
+The cookie name is `theme`. The value is either `light` or `dark`.
+
+#### Set the lifetime
+
+```java
+themeCookie.setMaxAge(7 * 24 * 60 * 60);
+```
+
+The cookie is configured to last for seven days, subject to browser policies and user actions.
+
+#### Set the path
+
+```java
+themeCookie.setPath(request.getContextPath().isEmpty()
+        ? "/"
+        : request.getContextPath());
+```
+
+This limits the cookie to the application's context path, except when the application runs at the server root.
+
+#### Set `HttpOnly`
+
+```java
+themeCookie.setHttpOnly(true);
+```
+
+This prevents ordinary JavaScript from reading the cookie. It does not stop the browser from sending it with matching requests.
+
+#### Set `Secure`
+
+```java
+themeCookie.setSecure(request.isSecure());
+```
+
+On HTTPS requests, this marks the cookie as secure. For a production application, ensure the site consistently uses HTTPS and configure secure cookies accordingly.
+
+#### Set `SameSite`
+
+```java
+themeCookie.setAttribute("SameSite", "Lax");
+```
+
+This requests a `SameSite=Lax` policy, which helps restrict cookies on certain cross-site requests. It is not a replacement for CSRF protection in applications that need it.
+
+#### Send the cookie
+
+```java
+response.addCookie(themeCookie);
+```
+
+The response includes a `Set-Cookie` header. The browser stores the cookie and sends it on subsequent matching requests.
+
+## 23. Read the Cookie — `theme-result.jsp`
+
+Location:
+
+```text
+src/main/webapp/theme-result.jsp
+```
+
+Complete code:
+
+```jsp
+<%@ page contentType="text/html;charset=UTF-8" language="java" %>
+<%@ page import="jakarta.servlet.http.Cookie" %>
+
+<%
+    String theme = "not set";
+
+    Cookie[] cookies = request.getCookies();
+
+    if (cookies != null) {
+
+        for (Cookie cookie : cookies) {
+
+            if ("theme".equals(cookie.getName())) {
+                theme = cookie.getValue();
+                break;
+            }
+        }
+    }
+
+    // Only allow expected values to influence presentation.
+    if (!"light".equals(theme) && !"dark".equals(theme)) {
+        theme = "not set";
+    }
+%>
+
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Saved Theme</title>
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 30px;
+        }
+
+        .light {
+            background: white;
+            color: black;
+        }
+
+        .dark {
+            background: #222;
+            color: white;
+        }
+    </style>
+</head>
+
+<body class="<%= theme.equals("dark") ? "dark" : "light" %>">
+
+    <h1>Saved Theme Preference</h1>
+
+    <p>Your saved theme is: <strong><%= theme %></strong></p>
+
+    <p>
+        <a href="${pageContext.request.contextPath}/theme.jsp">
+            Change Theme
+        </a>
+    </p>
+
+    <form action="${pageContext.request.contextPath}/clear-theme"
+          method="post">
+
+        <button type="submit">Delete Theme Cookie</button>
+
+    </form>
+
+</body>
+
+</html>
+```
+
+### Explanation
+
+#### Read cookies
+
+```java
+Cookie[] cookies = request.getCookies();
+```
+
+The method returns cookies included with the request. It can return `null` if no cookies were sent.
+
+#### Find the desired cookie
+
+```java
+for (Cookie cookie : cookies) {
+    if ("theme".equals(cookie.getName())) {
+        theme = cookie.getValue();
+        break;
+    }
+}
+```
+
+We inspect each cookie and select the one named `theme`.
+
+#### Why validate the value?
+
+Cookie values originate from the client and can be changed. We only accept the values the application supports.
+
+For this example, the only accepted values are:
+
+```text
+light
+dark
+```
+
+The JSP applies a corresponding CSS class.
+
+---
+
+## 24. Delete a Cookie — `ClearThemeServlet.java`
+
+Location:
+
+```text
+src/main/java/servlet/ClearThemeServlet.java
+```
+
+Complete code:
+
+```java
+package servlet;
+
+import jakarta.servlet.ServletException;
+import jakarta.servlet.annotation.WebServlet;
+import jakarta.servlet.http.Cookie;
+import jakarta.servlet.http.HttpServlet;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+
+import java.io.IOException;
+
+@WebServlet("/clear-theme")
+public class ClearThemeServlet extends HttpServlet {
+
+    @Override
+    protected void doPost(
+            HttpServletRequest request,
+            HttpServletResponse response
+    ) throws ServletException, IOException {
+
+        Cookie themeCookie = new Cookie("theme", "");
+
+        // A zero age requests immediate removal.
+        themeCookie.setMaxAge(0);
+
+        // Use the same path as when the cookie was created.
+        themeCookie.setPath(request.getContextPath().isEmpty()
+                ? "/"
+                : request.getContextPath());
+
+        themeCookie.setHttpOnly(true);
+        themeCookie.setSecure(request.isSecure());
+        themeCookie.setAttribute("SameSite", "Lax");
+
+        response.addCookie(themeCookie);
+
+        response.sendRedirect(
+                request.getContextPath() + "/theme-result.jsp"
+        );
+    }
+}
+```
+
+### How does cookie deletion work?
+
+Cookies are not generally deleted by calling a Java method on the browser.
+
+Instead, the server sends another cookie with the same name and matching scope, but with a zero `Max-Age`.
+
+```java
+themeCookie.setMaxAge(0);
+```
+
+The browser receives the updated cookie instruction and removes the matching cookie.
+
+**Important:** The cookie's path and domain must match the cookie you are trying to remove. Otherwise, a separate cookie may be affected, or the original may remain.
+
+---
+
+# Part 7: Testing the Cookie Example
+
+## 25. Run the Project
+
+Start the application through Smart Tomcat.
+
+Assuming the context path is `/session-management-demo`, open:
+
+```text
+http://localhost:8080/session-management-demo/theme.jsp
+```
+
+### Test 1: Save a theme
+
+1. Choose `dark`.
+2. Click **Save Preference**.
+3. The browser redirects to `theme-result.jsp`.
+4. The page displays `dark` and applies the dark background.
+
+### Test 2: Refresh the result page
+
+Refresh `theme-result.jsp`.
+
+The browser sends the saved `theme` cookie again, so the page should continue to display the selected preference.
+
+### Test 3: Inspect the cookie
+
+In Chrome:
 
 1. Open Developer Tools.
-2. Select **Application**.
+2. Select the **Application** tab.
 3. Open **Storage → Cookies**.
-4. Select the localhost entry.
-5. Inspect the `theme` cookie and, when a session exists, the `JSESSIONID` cookie.
+4. Select the application's origin.
+5. Look for the `theme` cookie.
 
-The exact labels can vary slightly between browser versions.
+You should see a cookie similar to:
+
+```text
+Name: theme
+Value: dark
+Path: /session-management-demo
+HttpOnly: true
+```
+
+The cookie's Secure flag depends on whether the request was served over HTTPS.
+
+### Test 4: Delete the cookie
+
+Click **Delete Theme Cookie**.
+
+The browser is redirected to the result page. The page should now display:
+
+```text
+Your saved theme is: not set
+```
 
 ---
 
-# Part 8: Common Mistakes
+# Part 8: `HttpSession` vs Cookies
 
-## 35. Mistake 1: Using `getSession()` to Check Authentication
+## 26. Main Differences
 
-Incorrect approach:
+| Feature | `HttpSession` | Cookie |
+|---|---|---|
+| Where data is normally stored | Server | Browser |
+| Main purpose | Associate server-side data with a user session | Store small client-side values or identifiers |
+| Accessed using | `HttpSession` | `Cookie` |
+| Typical creation | `request.getSession()` | `new Cookie(name, value)` |
+| Typical retrieval | `session.getAttribute(name)` | `request.getCookies()` |
+| Can store Java objects? | Yes, as session attributes | No; cookie values are strings |
+| Data visible to the client? | Session attributes normally stay server-side | Cookie values can be visible to the client |
+| Automatically sent on matching requests? | The browser sends the session ID cookie | Yes, subject to cookie scope and browser policies |
+| Lifetime | Inactivity timeout, invalidation, or container lifecycle | Browser-session lifetime or configured expiry |
+| Example | Store authenticated username | Remember a theme preference |
 
-```java
-HttpSession session = request.getSession();
+## 27. How Are They Related?
+
+In many Servlet applications, `HttpSession` uses a cookie named `JSESSIONID` to help identify the session.
+
+For example:
+
+```text
+Browser cookie:
+JSESSIONID=ABC123XYZ
 ```
 
-If there is no session, this creates one.
+The browser sends that identifier to the server with subsequent requests.
 
-When you only want to check whether a session exists, use:
+The servlet container uses it to locate the associated session and its attributes.
+
+The actual username may be stored on the server:
 
 ```java
-HttpSession session = request.getSession(false);
+session.setAttribute("username", "rahul");
 ```
 
-Then check for the required authentication attribute.
+The cookie typically holds the identifier, not the complete session object.
 
-## 36. Mistake 2: Assuming Every Session Means Login
+---
 
-A session may exist even if the user is not authenticated.
+# Part 9: Important Security Concepts
+
+## 28. Never Trust Cookie Values
+
+A user can modify ordinary cookie values.
+
+Do not assume that this is safe:
+
+```java
+Cookie roleCookie = new Cookie("role", "admin");
+```
+
+If authorization depends on a client-controlled cookie, a user may change its value.
+
+Use server-side authorization checks and a trusted source of role information.
+
+## 29. Protect Session Identifiers
+
+A session identifier can grant access to a user's session.
+
+Recommended practices include:
+
+- Use HTTPS.
+- Mark session cookies `Secure` when using HTTPS.
+- Use `HttpOnly` for session cookies.
+- Configure an appropriate `SameSite` policy.
+- Regenerate the session identifier after authentication when appropriate.
+- Invalidate the session during logout.
+- Avoid placing session identifiers in URLs.
+- Avoid logging or displaying session identifiers in production.
+- Configure suitable session inactivity timeouts.
+
+## 30. `HttpSession` Is Not Permanent Storage
+
+Session data is not a replacement for a database.
 
 For example:
 
 ```java
-HttpSession session = request.getSession();
-
-session.setAttribute("theme", "dark");
+session.setAttribute("username", "rahul");
 ```
 
-This session stores a preference, but it does not prove that the user is logged in.
+This information is available while the session remains valid and the application retains the session state.
 
-Check an appropriate authentication attribute and enforce authorization for protected resources.
+It can disappear when the session expires, is invalidated, or the application environment loses its session data.
 
-## 37. Mistake 3: Storing Passwords in Cookies
-
-Never store passwords in ordinary cookies.
-
-Cookies are controlled by the client and may be exposed through browser tools, insecure connections, or other vulnerabilities.
-
-Use secure authentication practices and, when using sessions, keep authentication state on the server.
-
-## 38. Mistake 4: Forgetting to Invalidate the Session
-
-Merely redirecting to the login page does not log the user out.
-
-This is insufficient:
-
-```java
-response.sendRedirect(request.getContextPath() + "/");
-```
-
-A proper logout should invalidate the authenticated session:
-
-```java
-HttpSession session = request.getSession(false);
-
-if (session != null) {
-    session.invalidate();
-}
-```
-
-## 39. Mistake 5: Assuming Cookie Values Are Trustworthy
-
-A user can modify an ordinary cookie.
-
-Never trust values such as:
-
-```text
-role=ADMIN
-```
-
-just because they appear in a cookie.
-
-Authorization must be enforced by trusted server-side logic.
-
-## 40. Mistake 6: Assuming Session Data Is Stored in the Browser
-
-With ordinary server-side `HttpSession` storage, session attributes are held on the server.
-
-The browser typically sends the session identifier, and the container uses that identifier to locate the session.
-
-The implementation can vary with server architecture, but students should not assume that all session attributes are stored in the `JSESSIONID` cookie.
-
----
-
-# Part 9: Security Best Practices
-
-1. Use HTTPS in production.
-2. Protect session identifiers as sensitive credentials.
-3. Rotate the session ID after successful authentication.
-4. Configure appropriate session timeouts.
-5. Invalidate the session during logout.
-6. Use `HttpOnly` and `Secure` cookie attributes where appropriate.
-7. Configure an appropriate `SameSite` policy for session cookies.
-8. Validate all request parameters on the server.
-9. Do not trust client-supplied cookie values for authorization.
-10. Protect state-changing operations against cross-site request forgery (CSRF).
-11. Avoid exposing session IDs in pages, URLs, logs, or screenshots.
-12. Do not treat session management alone as a complete authentication or authorization system.
+For persistent student records, use a database. For temporary per-user web state, `HttpSession` is often suitable.
 
 ---
 
 # Part 10: Practice Questions
 
-## 41. Conceptual Questions
+## 31. Beginner-Level Tasks
 
-1. Why is HTTP called stateless?
-2. What is session management?
-3. What is `HttpSession`?
-4. What is a cookie?
-5. What is the difference between `getSession()` and `getSession(false)`?
-6. What does `setAttribute()` do?
-7. What does `invalidate()` do?
-8. What is the purpose of `setMaxInactiveInterval()`?
-9. What is the typical name of a servlet container's session cookie?
-10. Why are session IDs sensitive?
-11. How does the browser send a cookie to the server?
-12. What is the difference between a session attribute and a cookie value?
-13. Why should an application invalidate a session during logout?
-14. Can a session exist without an authenticated user?
-15. Why should role-based authorization not rely on a user-editable cookie?
+1. Store a student's name in the session and display it on a JSP.
+2. Store a student's semester in the session.
+3. Add a button that updates the course stored in the session.
+4. Display whether the current session is new.
+5. Set the session inactivity timeout to five minutes.
+6. Create a logout button that invalidates the session.
+7. Create a cookie named `language` with value `English`.
+8. Read and display the `language` cookie in a JSP.
+9. Add a dropdown to choose `English` or `Hindi` and save it in a cookie.
+10. Add a button to delete the language cookie.
 
-## 42. Practical Tasks
+## 32. Intermediate-Level Tasks
 
-### Task 1: Store a Username in a Session
-
-Create a servlet that stores a username in `HttpSession` and displays it on a separate request.
-
-### Task 2: Update a Session Attribute
-
-Store a student's name and then update it to a different name using `setAttribute()`.
-
-### Task 3: Remove a Session Attribute
-
-Store two attributes and remove only one. Verify that the other attribute remains.
-
-### Task 4: Configure a Session Timeout
-
-Set the inactivity timeout to 60 seconds. Observe what happens after the session expires.
-
-### Task 5: Create a Language Cookie
-
-Create a cookie named `language` with the value `en`.
-
-### Task 6: Read a Cookie
-
-Read the `language` cookie and display its value on an HTML page.
-
-### Task 7: Update a Cookie
-
-Change the `language` cookie from `en` to `hi`.
-
-### Task 8: Delete a Cookie
-
-Delete the `language` cookie using `setMaxAge(0)` and a matching path.
-
-### Task 9: Implement Logout
-
-Create a logout servlet that invalidates the current session.
-
-### Task 10: Protect a Dashboard
-
-Allow the dashboard to display private information only if a valid session contains the appropriate authentication attribute.
+1. Create a login form that redirects to a dashboard after authentication.
+2. Restrict the dashboard to users who have a valid login session.
+3. Redirect unauthenticated users to the login page.
+4. Add a profile page that reads the username from the session.
+5. Create a cookie that remembers a preferred theme for seven days.
+6. Display a welcome message using session attributes.
+7. Remove one session attribute without invalidating the whole session.
+8. Invalidate the session and verify that the dashboard becomes inaccessible.
+9. Compare the session ID before and after authentication.
+10. Explain why the session identifier should not be displayed in a production dashboard.
 
 ---
 
-# Final Summary
+# Final Revision
 
-- **Session management** helps associate multiple HTTP requests with the same user or browser session.
-- **`HttpSession`** stores session attributes on the server.
-- **Cookies** store small pieces of data in the browser and can be returned with subsequent matching requests.
-- A session ID cookie such as `JSESSIONID` commonly connects a browser request to a server-side session.
-- Use `request.getSession(false)` when checking for an existing session without creating one.
-- Use `session.invalidate()` to invalidate a session during logout.
-- Cookies are client-controlled, so do not trust them for authorization.
-- Use HTTPS and appropriate session-cookie security settings in production.
-- Use PRG after form submissions to avoid the common refresh-after-POST problem.
+**`HttpSession`**
 
-**Remember:** `HttpSession` is the server-side session abstraction; a cookie is one common way the browser carries the session identifier.
+```java
+HttpSession session = request.getSession();
+
+session.setAttribute("username", "Rahul");
+
+String username =
+        (String) session.getAttribute("username");
+
+session.removeAttribute("username");
+
+session.invalidate();
+```
+
+**Cookie**
+
+```java
+Cookie cookie = new Cookie("theme", "dark");
+
+cookie.setMaxAge(7 * 24 * 60 * 60);
+cookie.setPath("/");
+cookie.setHttpOnly(true);
+
+response.addCookie(cookie);
+```
+
+**Read cookies**
+
+```java
+Cookie[] cookies = request.getCookies();
+
+if (cookies != null) {
+    for (Cookie cookie : cookies) {
+        System.out.println(
+                cookie.getName() + " = " + cookie.getValue()
+        );
+    }
+}
+```
