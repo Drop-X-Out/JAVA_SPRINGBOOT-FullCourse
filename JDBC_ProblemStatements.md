@@ -1,6 +1,4 @@
-# Ten JDBC Problem Statements
-
-Each numbered folder contains the full PS, Maven structure, SQL schema/sample data, and Java implementation.
+# JDBC Problem Statements
 
 ## 1. Employee Management System
 
